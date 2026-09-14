@@ -1,5 +1,6 @@
 import { OrderQueue, Inventory, OrderProcessing } from "./Operations";
 import CustomerHistory from "./CustomerHistory";
+import ProductPage from "./ProductPage";
 import {
   createContext,
   useCallback,
@@ -320,6 +321,8 @@ function Shell() {
           />
           <Route path="/orders/:id" element={<OrderDetail />} />
           <Route path="/products" element={<Catalog />} />
+          <Route path="/products/new" element={<ProductPage key="new" user={user} create />} />
+          <Route path="/products/:id" element={<ProductPage key={location.pathname} user={user} />} />
           <Route
             path="*"
             element={
@@ -507,7 +510,7 @@ function Catalog({ checkout = false }) {
                     <span className="eyebrow">
                       PRODUCT / {String(p.id).padStart(4, "0")}
                     </span>
-                    <h2>{p.name}</h2>
+                    <h2><Link to={`/products/${p.id}`}>{p.name}</Link></h2>
                     <div className="product-bottom">
                       <strong>{amount(p.price)}</strong>
                       {customer && (
@@ -550,6 +553,7 @@ function Catalog({ checkout = false }) {
               <span>{items.length}</span>
             </div>
             <form onSubmit={submit}>
+              <ErrorNotice error={submitError} />
               {items.length ? (
                 <>
                   <fieldset disabled={busy} className="cart-fields">
@@ -602,7 +606,6 @@ function Catalog({ checkout = false }) {
                       Check quantities against available stock.
                     </p>
                   )}
-                  <ErrorNotice error={submitError} />
                   <button className="primary wide" disabled={busy || invalid}>
                     {busy ? "Placing order…" : "Place order"}
                     <ArrowRight size={18} />

@@ -1,0 +1,7 @@
+.product-workspace { max-width: 760px; }
+.product-editor, .product-editor fieldset { display: grid; gap: 20px; }
+.product-editor fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.product-active { display: flex; align-items: center; }
+.product-active input { width: 20px; min-height: 20px; }
+.product-actions { display: flex; flex-wrap: wrap; gap: 12px; }
+.product-delete { border-top: 1px solid var(--line); padding-top: 20px; display: grid; gap: 16px; }

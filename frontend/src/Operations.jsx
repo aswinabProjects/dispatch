@@ -244,10 +244,13 @@ export function Inventory({
           <span className="section-kicker">CATALOG</span>
           <h1 tabIndex={-1}>Inventory</h1>
         </div>
-        <button className="secondary" disabled={loading} onClick={reload}>
-          <RefreshCw size={16} />
-          Refresh inventory
-        </button>
+        <div className="product-actions">
+          <Link className="primary" to="/products/new">New product</Link>
+          <button className="secondary" disabled={loading} onClick={reload}>
+            <RefreshCw size={16} />
+            Refresh inventory
+          </button>
+        </div>
       </header>
       <div className="queue-tools">
         <div className="search">
@@ -283,7 +286,7 @@ export function Inventory({
               {visible.map((p) => (
                 <tr key={p.id}>
                   <td data-label="Product">
-                    <strong>{p.name}</strong>
+                    <Link className="order-id" to={`/products/${p.id}`}>{p.name}</Link>
                   </td>
                   <td data-label="Product ID">#{p.id}</td>
                   <td data-label="Unit price" className="money">

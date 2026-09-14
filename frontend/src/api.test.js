@@ -18,6 +18,20 @@ async function signIn() {
   await client.login("customer", "password");
 }
 describe("centralized authentication", () => {
+  it("uses existing product detail and mutation endpoints with JWT", async () => {
+    await signIn();
+    const payload = { name: "Product", price: "12.50", quantity: 0, is_active: false };
+    fetch.mockResolvedValue(response(200, { id: 8, ...payload }));
+    await client.api.product(8);
+    expect(fetch).toHaveBeenLastCalledWith("/api/products/8/", expect.objectContaining({ headers: expect.objectContaining({ Authorization: "Bearer old-access" }) }));
+    await client.api.createProduct(payload);
+    expect(fetch).toHaveBeenLastCalledWith("/api/products/", expect.objectContaining({ method: "POST", body: JSON.stringify(payload) }));
+    await client.api.updateProduct(8, { quantity: 12 });
+    expect(fetch).toHaveBeenLastCalledWith("/api/products/8/", expect.objectContaining({ method: "PATCH", body: JSON.stringify({ quantity: 12 }) }));
+    fetch.mockResolvedValueOnce({ ok: true, status: 204, json: async () => { throw new SyntaxError("Empty body"); } });
+    await expect(client.api.deleteProduct(8)).resolves.toBeNull();
+    expect(fetch).toHaveBeenLastCalledWith("/api/products/8/", expect.objectContaining({ method: "DELETE" }));
+  });
   it("attaches JWT and obtains current identity from /api/me/", async () => {
     await signIn();
     fetch.mockResolvedValueOnce(

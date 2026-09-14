@@ -14,6 +14,10 @@ vi.mock("./api", () => ({
     me: vi.fn(),
     orders: vi.fn(),
     products: vi.fn(),
+    product: vi.fn(),
+    createProduct: vi.fn(),
+    updateProduct: vi.fn(),
+    deleteProduct: vi.fn(),
     order: vi.fn(),
     createOrder: vi.fn(),
     cancel: vi.fn(),
@@ -51,6 +55,82 @@ beforeEach(() => {
   ]);
 });
 afterEach(cleanup);
+const product = { id: 8, name: "Travel dock", price: "25.50", quantity: 4, is_active: true };
+
+it.each(["staff", "manager"])("lets %s create products from inventory", async (role) => {
+  api.me.mockResolvedValue({ id: 2, username: "operator", role });
+  api.createProduct.mockResolvedValue(product);
+  api.product.mockResolvedValue(product);
+  mount("/products");
+  fireEvent.click(await screen.findByRole("link", { name: "New product" }));
+  fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Travel dock" } });
+  fireEvent.change(screen.getByLabelText("Unit price"), { target: { value: "25.50" } });
+  fireEvent.change(screen.getByLabelText("Available stock"), { target: { value: "4" } });
+  fireEvent.click(screen.getByRole("button", { name: "Create product" }));
+  await waitFor(() => expect(api.createProduct).toHaveBeenCalledWith({ name: "Travel dock", price: "25.50", quantity: 4, is_active: true }));
+  expect(await screen.findByRole("heading", { name: "Edit Travel dock" })).toBeVisible();
+});
+
+it("guards product creation URLs from customers", async () => {
+  mount("/products/new");
+  expect(await screen.findByRole("alert")).toHaveTextContent("Only Staff and Managers");
+  expect(api.createProduct).not.toHaveBeenCalled();
+});
+
+it.each(["staff", "manager"])("lets %s edit availability without overwriting unedited stock", async (role) => {
+  api.me.mockResolvedValue({ id: 2, username: "operator", role });
+  api.product.mockResolvedValue(product);
+  api.updateProduct.mockResolvedValue({ ...product, is_active: false });
+  mount("/products/8");
+  fireEvent.click(await screen.findByLabelText("Active"));
+  fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+  await waitFor(() => expect(api.updateProduct).toHaveBeenCalledWith("8", { is_active: false }));
+  expect(await screen.findByText("Product saved.")).toBeVisible();
+  expect(Boolean(screen.queryByRole("button", { name: "Delete product" }))).toBe(role === "manager");
+});
+
+it("shows customer product details without mutation controls", async () => {
+  api.product.mockResolvedValue(product);
+  mount("/products/8");
+  expect(await screen.findByRole("heading", { name: "Travel dock" })).toBeVisible();
+  expect(api.product).toHaveBeenCalledWith("8");
+  expect(screen.queryByRole("button", { name: "Save changes" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Delete product" })).not.toBeInTheDocument();
+});
+
+it("requires manager confirmation before deleting a product", async () => {
+  api.me.mockResolvedValue({ id: 2, username: "operator", role: "manager" });
+  api.product.mockResolvedValue(product);
+  api.deleteProduct.mockResolvedValue(null);
+  mount("/products/8");
+  fireEvent.click(await screen.findByRole("button", { name: "Delete product" }));
+  expect(screen.getByText(/associated order items/)).toBeVisible();
+  expect(api.deleteProduct).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "Yes, delete product" }));
+  await waitFor(() => expect(api.deleteProduct).toHaveBeenCalledWith("8"));
+  expect(await screen.findByRole("heading", { name: "Inventory" })).toBeVisible();
+});
+
+it("preserves product edits when the backend rejects a save", async () => {
+  api.me.mockResolvedValue({ id: 2, username: "operator", role: "staff" });
+  api.product.mockResolvedValue(product);
+  api.updateProduct.mockRejectedValue({ status: 400, message: "price: Ensure no more than 2 decimal places." });
+  mount("/products/8");
+  fireEvent.change(await screen.findByLabelText("Name"), { target: { value: "Updated dock" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("decimal places");
+  expect(screen.getByLabelText("Name")).toHaveValue("Updated dock");
+});
+
+it("retains checkout errors when a refreshed catalog removes cart items", async () => {
+  api.createOrder.mockRejectedValue({ status: 400, message: "This product is currently inactive" });
+  mount("/orders/new");
+  fireEvent.click(await screen.findByRole("button", { name: "Add to order" }));
+  api.products.mockResolvedValue([]);
+  fireEvent.click(screen.getByRole("button", { name: "Place order" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("currently inactive");
+  expect(await screen.findByText("Your draft is empty")).toBeVisible();
+});
 function mount(path) {
   render(
     <MemoryRouter initialEntries={[path]}>

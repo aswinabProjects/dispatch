@@ -156,6 +156,12 @@ export async function request(path, options = {}) {
 export const api = {
   me: () => request("me/"),
   products: () => request("products/"),
+  product: (id) => request(`products/${id}/`),
+  createProduct: (product) =>
+    request("products/", { method: "POST", body: JSON.stringify(product) }),
+  updateProduct: (id, changes) =>
+    request(`products/${id}/`, { method: "PATCH", body: JSON.stringify(changes) }),
+  deleteProduct: (id) => request(`products/${id}/`, { method: "DELETE" }),
   orders: (managed) => request(managed ? "orders/manage/" : "orders/"),
   order: (id, managed) => request(`orders/${managed ? "manage/" : ""}${id}/`),
   createOrder: (items) =>
