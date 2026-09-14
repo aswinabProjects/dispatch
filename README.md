@@ -842,6 +842,8 @@ These features are intentionally outside the current project scope.
 
 ---
 
+CI/CD pipeline verified with GitHub Actions and Render.
+
 ## Project Status
 
 **Completed**
