@@ -1,4 +1,5 @@
 const KEY = "dispatch.session";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
 let tokens;
 try {
   tokens = JSON.parse(sessionStorage.getItem(KEY)) || null;
@@ -67,7 +68,7 @@ export function hasSession() {
 async function raw(path, options = {}) {
   let response;
   try {
-    response = await fetch(`/api/${path}`, {
+    response = await fetch(`${API_BASE_URL}/api/${path}`, {
       ...options,
       headers: { "Content-Type": "application/json", ...options.headers },
     });
