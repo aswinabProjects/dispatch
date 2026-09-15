@@ -1,77 +1,96 @@
 # Dispatch — Order & Fulfillment Management System
 
-A full-stack **Order & Fulfillment Management System** built with Django REST Framework, PostgreSQL, React, and JWT authentication.
+Dispatch is a backend-focused **Order & Fulfillment Management System** built with **Django REST Framework and PostgreSQL**, featuring JWT authentication, role-based authorization, transaction-safe inventory management, and concurrency protection, with **React used as the presentation layer**.
 
-The project simulates the backend and operational workflow of an online ordering system after a customer places an order. It supports product management, order creation, inventory reservation, customer cancellation, role-based access control, and controlled fulfillment from order placement through delivery.
+The application provides REST APIs for product management, order placement, stock reservation, controlled fulfillment workflows, order cancellation, and role-based operations.
 
-The frontend provides two distinct experiences:
-
-- A customer-facing ordering portal
-- A Staff/Manager fulfillment operations workspace
-
----
-
-## Features
-
-### Authentication
+## Key Features
 
 - JWT-based authentication
-- Access and refresh tokens
-- Automatic access-token refresh
-- Authenticated current-user endpoint (`/api/me/`)
-- Role-aware frontend navigation
-- Protected API endpoints
-- Session handling and logout
+- Customer, Staff, and Manager roles
+- Role-based API permissions
+- Product and inventory management
+- Customer order placement
+- Automatic stock reservation
+- Stock restoration on cancellation
+- Controlled order fulfillment workflow
+- Backend-enforced status transitions
+- Transaction-safe inventory operations
+- Concurrency protection using database row locking
+- Automated API testing
+- Dockerized backend
+- React-based presentation layer
+- CI/CD workflow
 
-### User Roles
+## Technology Stack
 
-The system supports three roles:
+### Backend
+- Python
+- Django
+- Django REST Framework
+- Simple JWT
 
-#### Customer
+### Database
+- PostgreSQL
+
+### Testing
+- pytest
+- pytest-django
+
+### DevOps & Deployment
+- Docker
+- Gunicorn
+- GitHub Actions
+- Render
+- Environment-based configuration
+
+### Frontend / Presentation Layer
+- React
+- Vite
+- JavaScript
+- CSS
+
+### Development Tools
+- Git
+- GitHub
+- Postman
+
+## User Roles
+
+### Customer
 
 Customers can:
 
-- Browse active products
+- View available products
 - Create orders
-- View their own order history
-- View individual orders
-- Cancel their own pending orders
-- Track order fulfillment progress
-
-Customers cannot:
-
-- Access another customer's orders
-- Manage fulfillment
-- Create or modify products
-- Directly modify or delete orders
-
-#### Staff
-
-Staff members can:
-
-- View all products
-- Create and update products
-- View all customer orders
+- View their own orders
 - View individual order details
-- Advance orders through the fulfillment workflow
+- Cancel eligible orders
 
-Staff cannot delete products.
+Customers cannot directly control fulfillment status or access administrative operations.
 
-#### Manager
+### Staff
 
-Managers can:
+Staff users can:
 
-- View all products
-- Create, update, and delete products
-- View all orders
-- View individual order details
-- Manage the complete fulfillment workflow
+- Access permitted order and fulfillment operations
+- Process orders through the fulfillment workflow
+- Perform authorized operational actions
 
----
+### Manager
+
+Managers have elevated access to:
+
+- Product management
+- Order management
+- Fulfillment operations
+- Administrative workflows
+
+Authorization rules are enforced by the **Django REST Framework backend**, independently of frontend visibility.
 
 ## Order Fulfillment Workflow
 
-Orders follow a controlled state transition:
+Dispatch uses a controlled order lifecycle:
 
 ```text
 Pending
@@ -85,675 +104,165 @@ Shipped
 Delivered
 ```
 
-A pending order may also be:
+Orders may also transition to:
 
 ```text
-Pending → Cancelled
+Cancelled
 ```
 
-Invalid transitions are rejected by the backend.
+Backend business rules determine whether a requested transition is valid.
 
-For example:
+Clients cannot arbitrarily modify fulfillment state.
 
-```text
-Pending → Shipped
-```
+## Inventory Management
 
-is not permitted.
+Inventory operations are handled by backend business logic.
 
-Delivered and cancelled orders are terminal states.
+When an order is placed:
 
----
+1. The backend validates the requested order data.
+2. Product stock is checked.
+3. Required inventory is reserved.
+4. The order and its items are created.
+5. Stock changes are committed only if the complete operation succeeds.
 
-## Stock Management
+When an eligible order is cancelled, reserved stock is restored.
 
-Product stock is managed automatically during order operations.
-
-### Order Creation
-
-When an order is created:
-
-1. The backend validates every requested product.
-2. The product must be active.
-3. The requested quantity must be greater than zero.
-4. Sufficient stock must be available.
-5. The current product price is captured by the backend.
-6. Product stock is deducted.
-7. The order and its items are created.
-
-The client is not trusted to provide the final product price.
-
-### Order Cancellation
-
-Customers may cancel only their own **pending** orders.
-
-When an order is cancelled:
-
-- Its status changes to `cancelled`.
-- The quantities reserved by the order are returned to product inventory.
-
-Orders that have already entered fulfillment cannot be cancelled by the customer.
-
----
+This keeps order state and inventory state synchronized.
 
 ## Transaction Safety & Concurrency
 
-Critical stock and order operations use PostgreSQL transaction protection.
+Critical order and inventory operations use Django database transaction management.
 
-### Atomic Transactions
+### `transaction.atomic()`
 
-Django's:
+Related database operations are executed as a single transaction.
 
-```python
-transaction.atomic()
-```
+If one part of an operation fails, the transaction can be rolled back instead of leaving partial order or stock updates in the database.
 
-ensures multi-step database operations follow an **all-or-nothing** rule.
+### `select_for_update()`
 
-If one item in a multi-product order fails validation or stock verification, previous database changes within the transaction are rolled back.
+Relevant database rows are locked during critical stock and order operations.
 
-### Row-Level Locking
+This helps protect against race conditions such as:
 
-Critical database rows are retrieved using:
+- Two customers attempting to purchase the same remaining stock
+- Multiple cancellation requests affecting the same order
+- Simultaneous fulfillment updates
+- Conflicting inventory modifications
 
-```python
-select_for_update()
-```
+Together, `transaction.atomic()` and `select_for_update()` help maintain **data integrity and inventory consistency under concurrent requests**.
 
-This prevents concurrent requests from modifying the same stock or order state simultaneously.
+## Authentication & Authorization
 
-It protects operations such as:
-
-- Concurrent purchases of the last available product
-- Duplicate order cancellations
-- Concurrent fulfillment status changes
-
----
-
-## Tech Stack
-
-### Backend
-
-- Python
-- Django
-- Django REST Framework
-- PostgreSQL
-- Simple JWT
-- pytest
-- pytest-django
-
-### Frontend
-
-- React 19
-- Vite
-- React Router
-- JavaScript
-- CSS
-- Lucide Icons
-- Vitest
-- Testing Library
-- ESLint
-
----
-
-## Project Architecture
-
-```text
-order_ful_mgmt_sys/
-│
-├── accounts/
-│   ├── models.py
-│   └── ...
-│
-├── products/
-│   ├── models.py
-│   ├── serializers.py
-│   ├── permissions.py
-│   ├── views.py
-│   ├── urls.py
-│   └── ...
-│
-├── orders/
-│   ├── models.py
-│   ├── serializers.py
-│   ├── permissions.py
-│   ├── views.py
-│   ├── urls.py
-│   └── ...
-│
-├── config/
-│   ├── settings.py
-│   ├── urls.py
-│   └── ...
-│
-├── frontend/
-│   ├── src/
-│   ├── public/
-│   ├── package.json
-│   └── ...
-│
-├── manage.py
-├── pytest.ini
-└── README.md
-```
-
-The backend is separated into domain-specific Django applications:
-
-- `accounts` — authentication and user roles
-- `products` — product catalog and inventory
-- `orders` — ordering and fulfillment workflow
-
----
-
-## Data Model
-
-### User
-
-The custom User model extends Django's `AbstractUser`.
-
-Important field:
-
-```text
-role
-```
-
-Supported values:
-
-```text
-customer
-staff
-manager
-```
-
----
-
-### Product
-
-A Product contains:
-
-```text
-name
-price
-quantity
-is_active
-```
-
-`quantity` represents currently available stock.
-
-Inactive products are hidden from customers.
-
----
-
-### Order
-
-An Order contains:
-
-```text
-customer
-status
-created_at
-updated_at
-```
-
-Each order belongs to one customer.
-
----
-
-### OrderItem
-
-`OrderItem` acts as the intermediate relationship between an Order and a Product.
-
-It stores:
-
-```text
-order
-product
-quantity
-price
-```
-
-The price is captured when the order is created so the order retains its original purchase price even if the Product price changes later.
-
-Relationship:
-
-```text
-User
-  │
-  └── Order
-        │
-        └── OrderItem
-              │
-              └── Product
-```
-
----
-
-## REST API
-
-### Authentication
-
-| Method | Endpoint | Purpose |
-|---|---|---|
-| POST | `/api/token/` | Obtain access and refresh tokens |
-| POST | `/api/token/refresh/` | Refresh access token |
-| GET | `/api/me/` | Retrieve authenticated user's identity and role |
-
----
-
-## Product API
-
-| Method | Endpoint | Customer | Staff | Manager |
-|---|---|---:|---:|---:|
-| GET | `/api/products/` | ✅ Active only | ✅ | ✅ |
-| POST | `/api/products/` | ❌ | ✅ | ✅ |
-| GET | `/api/products/<id>/` | ✅ Active only | ✅ | ✅ |
-| PUT/PATCH | `/api/products/<id>/` | ❌ | ✅ | ✅ |
-| DELETE | `/api/products/<id>/` | ❌ | ❌ | ✅ |
-
-Product permissions are enforced by the backend rather than relying on frontend visibility.
-
----
-
-## Customer Order API
-
-### List/Create Orders
+Authentication is implemented using **JWT access and refresh tokens**.
 
 ```http
-GET /api/orders/
-POST /api/orders/
+POST /api/token/
+POST /api/token/refresh/
+GET  /api/me/
 ```
 
-Customers can retrieve only their own orders.
-
-Example order creation request:
-
-```json
-{
-  "order_items": [
-    {
-      "product": 1,
-      "quantity": 2
-    },
-    {
-      "product": 3,
-      "quantity": 1
-    }
-  ]
-}
-```
-
-The backend determines:
-
-- Customer
-- Product price
-- Initial order status
-- Stock changes
-
----
-
-### Order Detail
-
-```http
-GET /api/orders/<id>/
-```
-
-The customer detail endpoint is retrieve-only.
-
-Direct:
-
-```http
-PUT
-PATCH
-DELETE
-```
-
-operations are not permitted.
-
----
-
-### Cancel Order
-
-```http
-PATCH /api/orders/<id>/cancel/
-```
-
-Cancellation is permitted only when:
-
-```text
-order.customer == request.user
-```
-
-and:
-
-```text
-order.status == "pending"
-```
-
-Successful cancellation restores reserved product stock.
-
----
-
-## Staff & Manager Order API
-
-### Fulfillment Queue
-
-```http
-GET /api/orders/manage/
-```
-
-Returns orders available to Staff and Managers for fulfillment management.
-
-### Management Detail
-
-```http
-GET /api/orders/manage/<id>/
-```
-
-### Update Fulfillment Status
-
-```http
-PATCH /api/orders/manage/<id>/status/
-```
+Protected endpoints require a valid JWT access token.
 
 Example:
 
-```json
-{
-  "status": "confirmed"
-}
+```http
+Authorization: Bearer <access_token>
 ```
 
-The backend validates that the requested transition is the next permitted state.
+Backend permissions determine which resources and operations are available to Customer, Staff, and Manager users.
 
----
+## REST API Design
 
-## Permissions & Security
-
-Authorization is enforced by Django REST Framework.
-
-The frontend uses role information to provide an appropriate interface, but frontend checks are **not treated as security controls**.
-
-Important backend protections include:
-
-- Authentication required for protected resources
-- Customer order ownership
-- Customer product restrictions
-- Staff/Manager fulfillment restrictions
-- Product modification permissions
-- Server-controlled prices
-- Server-controlled order status
-- Controlled fulfillment transitions
-- Transaction-safe stock updates
-- Row locking for concurrency-sensitive operations
-
----
-
-## Frontend
-
-The React frontend communicates directly with the Django REST API through a centralized API client.
-
-### Authentication Flow
-
-```text
-Login
-  ↓
-POST /api/token/
-  ↓
-Store JWT session
-  ↓
-GET /api/me/
-  ↓
-Determine user role
-  ↓
-Load appropriate interface
-```
-
-When an access token expires, the frontend attempts to obtain a new access token using the refresh token and retries the original request.
-
----
-
-## Customer Interface
-
-The customer experience is designed as an ordering/account portal.
-
-It includes:
-
-- Product browsing
-- Order draft
-- Order creation
-- My Orders
-- Order details
-- Fulfillment progress
-- Pending-order cancellation
-
----
-
-## Staff / Manager Fulfillment Workspace
-
-Staff and Managers use a separate operational interface centered around an **Order Queue**.
-
-It includes:
-
-- Fulfillment navigation rail
-- Active order queue
-- Status filters
-- Order counts
-- Inventory table
-- Order processing workspace
-- Order item information
-- Customer information
-- Fulfillment timeline
-- Next-action controls
-- Completed/cancelled terminal states
-
-The interface is intentionally structured as an operations workspace rather than a generic CRM dashboard.
-
----
-
-## Responsive Design
-
-The frontend adapts across:
-
-- Desktop
-- Laptop
-- Tablet
-- Mobile
-
-Responsive behavior includes:
-
-- Collapsible operational navigation
-- Responsive product layouts
-- Order tables converted to mobile-friendly summaries
-- Stacked actions on smaller screens
-- Vertical fulfillment progress on mobile
-- Touch-friendly controls
-
-Layouts were designed for common widths including:
-
-```text
-1440px
-1024px
-768px
-390px
-320px
-```
-
----
-
-## Backend Testing
-
-Backend testing uses:
-
-```bash
-pytest
-```
-
-Tests cover critical business behavior including:
-
-- Successful order creation
-- Stock deduction
-- Insufficient stock rejection
-- Inactive product rejection
-- Cancellation
-- Stock restoration
-- Valid fulfillment transitions
-- Invalid fulfillment transitions
-- Customer fulfillment restrictions
-- Authentication requirements
-- Non-pending cancellation restrictions
-- Role and ownership behavior
-
-Run the backend test suite:
-
-```bash
-pytest -v
-```
-
----
-
-## Frontend Testing
-
-The React application uses Vitest and Testing Library.
-
-The completed frontend verification includes:
-
-```text
-33 frontend tests passed
-ESLint passed
-Production build passed
-21 live API integration checks passed
-```
-
-Tests cover areas such as:
+The backend exposes REST APIs for the application's major resources and workflows, including:
 
 - Authentication
-- JWT refresh behavior
-- Role-aware navigation
-- API request handling
-- Order creation
-- Cancellation
-- Fulfillment actions
-- Permission errors
-- Validation errors
-- UI workflow rules
+- User identity
+- Products
+- Orders
+- Order details
+- Order cancellation
+- Fulfillment operations
 
----
+The API layer handles:
 
-## Live Integration Verification
+- Authentication
+- Authorization
+- Request validation
+- Business-rule enforcement
+- Database operations
+- Inventory consistency
+- HTTP response handling
 
-The frontend was tested against the real Django REST API using JWT-authenticated HTTP requests.
+## Backend Validation
 
-Verified scenarios include:
+Business-critical rules are enforced on the backend rather than relying on the React interface.
 
-- JWT login
-- `/api/me/`
-- Token refresh
-- Product visibility
-- Order creation
-- Price snapshotting
-- Stock reservation
-- Stock restoration
-- Customer ownership restrictions
-- Staff restrictions
-- Manager access
+Validation includes areas such as:
+
+- Order data
+- Product availability
+- Stock quantity
+- User permissions
+- Order ownership
 - Valid fulfillment transitions
-- Invalid fulfillment transitions
-- Customer cancellation rules
-- Customer fulfillment restrictions
-- Direct order modification restrictions
-- Concurrent cancellation protection
-- Concurrent fulfillment-transition protection
-- `updated_at` changes
+- Cancellation eligibility
 
-The frontend does not rely on a mock backend for these integration checks.
-
----
+This ensures that direct API requests are subject to the same rules as requests originating from the presentation layer.
 
 ## Local Setup
 
-### 1. Clone Repository
+### 1. Clone the repository
 
 ```bash
-git clone <repository-url>
-cd order_ful_mgmt_sys
+git clone https://github.com/aswinabProjects/dispatch.git
+cd dispatch
 ```
 
----
+### 2. Create a virtual environment
 
-### 2. Create Virtual Environment
+```bash
+python -m venv venv
+```
+
+### 3. Activate the environment
 
 Windows:
 
 ```bash
-python -m venv venv
 venv\Scripts\activate
 ```
 
 Linux/macOS:
 
 ```bash
-python3 -m venv venv
 source venv/bin/activate
 ```
 
----
-
-### 3. Install Backend Dependencies
+### 4. Install backend dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
----
+### 5. Configure environment variables
 
-### 4. Configure PostgreSQL
+Create a `.env` file and configure the required Django and PostgreSQL environment variables.
 
-Create a PostgreSQL database and configure the Django database settings/environment variables for your local environment.
+Sensitive information such as secret keys and database credentials should not be committed to Git.
 
-Example configuration:
-
-```text
-ENGINE=django.db.backends.postgresql
-NAME=<database-name>
-USER=<database-user>
-PASSWORD=<database-password>
-HOST=localhost
-PORT=5432
-```
-
-Do not commit real database passwords or secrets to the repository.
-
----
-
-### 5. Apply Migrations
+### 6. Apply migrations
 
 ```bash
 python manage.py migrate
 ```
 
----
-
-### 6. Create Admin User
-
-```bash
-python manage.py createsuperuser
-```
-
----
-
-### 7. Start Django
+### 7. Start the Django development server
 
 ```bash
 python manage.py runserver
 ```
-
-Backend:
-
-```text
-http://127.0.0.1:8000/
-```
-
----
 
 ## Frontend Setup
 
@@ -769,91 +278,108 @@ Install dependencies:
 npm install
 ```
 
-Start Vite:
+Start the Vite development server:
 
 ```bash
 npm run dev
 ```
 
-Frontend:
+The React application acts as the **presentation layer** and communicates with the Django REST API.
 
-```text
-http://127.0.0.1:5173/
+## Testing
+
+Run the backend automated test suite:
+
+```bash
+pytest
 ```
 
----
+Frontend tests can be run from the frontend directory:
 
-## Production Frontend Build
+```bash
+cd frontend
+npm test
+```
+
+Run linting:
+
+```bash
+npm run lint
+```
+
+Create a production build:
 
 ```bash
 npm run build
 ```
 
-The production bundle is generated in:
+## Verification
 
-```text
-frontend/dist/
+The project was verified through:
+
+- Automated backend testing with pytest
+- **33 frontend tests**
+- ESLint verification
+- Production frontend build
+- **21 live API integration checks**
+
+Testing covers critical application behavior including authentication, authorization, order operations, fulfillment workflows, inventory handling, and API validation.
+
+## Docker
+
+The backend can be containerized using Docker.
+
+Build the image:
+
+```bash
+docker build -t dispatch-backend .
 ```
 
----
+Run the container with environment variables:
 
-## Development Principles Demonstrated
+```bash
+docker run --env-file .env -p 8000:8000 dispatch-backend
+```
 
-This project demonstrates practical backend-development concepts including:
+Gunicorn is used as the production WSGI server.
 
-- Requirement-to-feature implementation
-- Django application architecture
-- Custom User models
-- Relational database modeling
-- Intermediate relationship models
-- REST API development
-- Serializer validation
-- Role-based authorization
-- Object-level ownership
-- Business-rule enforcement
+## CI/CD
+
+The project includes a CI/CD workflow using **GitHub Actions**.
+
+The pipeline supports automated verification of the application before deployment and forms part of the production-oriented development workflow.
+
+## Backend Concepts Demonstrated
+
+Dispatch demonstrates practical implementation of:
+
+- Python backend development
+- Django REST Framework
+- REST API design
+- PostgreSQL data modeling
+- Django ORM
 - JWT authentication
-- PostgreSQL transactions
-- Atomicity
-- Row-level locking
-- Race-condition prevention
-- Inventory consistency
-- Controlled state transitions
-- Backend unit/integration testing
-- React ↔ REST API integration
+- Role-based authorization
+- API permissions
+- Backend validation
+- Business-rule enforcement
+- Order state management
+- Inventory management
+- Database transactions
+- `transaction.atomic()`
+- Row-level locking with `select_for_update()`
+- Concurrency control
+- Data integrity
+- Automated API testing
+- Docker containerization
+- Gunicorn
+- CI/CD
+- Backend-to-frontend REST API integration
+
+## Repository
+
+GitHub: https://github.com/aswinabProjects/dispatch
 
 ---
 
-## Future Enhancements
-
-The current scope intentionally focuses on the core order and fulfillment workflow.
-
-Potential future additions could include:
-
-- Payment integration
-- Shipment-provider integration
-- Notifications
-- Coupons and promotions
-- Server-side pagination/filtering for large datasets
-- Product images
-- Fulfillment event history
-- Reporting and analytics
-
-These features are intentionally outside the current project scope.
-
----
-
-CI/CD pipeline verified with GitHub Actions and Render.
-
-## Project Status
-
-**Completed**
-
-The core Django/DRF backend, PostgreSQL integration, authentication, permissions, order workflow, stock management, concurrency protection, automated testing, React frontend, and live API integration are implemented and verified.
-
----
-
-## Author
-
-**Aswin A B**
-
-Python / Django Backend Developer
+**Dispatch** is a portfolio project focused primarily on demonstrating **Python/Django backend engineering, REST API architecture, authentication and authorization, transactional business logic, inventory consistency, concurrency handling, automated testing, and production-oriented deployment practices**.
